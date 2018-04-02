@@ -1,0 +1,87 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+
+<div id="messages">
+    <ul></ul>
+</div>
+<form id="message">
+    <input id="message" type="text" />
+</form>
+<script>
+    var sessionData;
+    $(document).ready(function () {
+
+        sessionData = sessionService.getSession();
+        if (!sessionData) {
+            console.log("starting");
+            directLineService.startConversation()
+                .then(function (data) {
+                    sessionData = data;
+                    sessionService.setSession(data);
+                    startSocket();
+                })
+                .catch(function (err) {
+                    console.error(err);
+                })
+        } else {
+            console.log("reconnecting");
+            directLineService.reconnect(sessionData.conversationId)
+                .then(function (data) {
+                    sessionData = data;
+                    sessionService.setSession(data);
+                    startSocket();
+                })
+                .catch(function () {
+                    console.error(err);
+                })
+        }
+        $("#message").on("submit", function (e) {
+            e.preventDefault();
+            var text = $("#message input").val();
+            if (text) {
+                sendMessage(text);
+                $("#message input").val("")
+            }
+            return false;
+        })
+    })
+
+    function startSocket() {
+        var socket = new WebSocket(sessionData.streamUrl);
+
+        socket.onopen = function () {
+            console.log("Socket has been opened!");
+
+        }
+        socket.onmessage = function (msg) {
+            var result = JSON.parse(msg.data);
+            console.log(result);
+            result.activities
+                .filter(function (x) {
+                    return x.type == "message";
+                })
+                .forEach(function (message) {
+                    writeMessage(message.from.id, message.text);
+                })
+
+        }
+    }
+
+    function writeMessage(sender, message) {
+        $("#messages ul").append("<li>" + sender + ":" + message + "</li>");
+    }
+
+    function sendMessage(message) {
+        directLineService.sendMessage(sessionData.conversationId, {
+            "type": "message",
+            "from": {
+                "id": "user",
+                "userToken": "1234567800987654321123456789876543211234567898765432"
+            },
+            "text": message
+        });
+    }
+</script>
